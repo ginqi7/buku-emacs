@@ -34,10 +34,10 @@
 
 ;;; Internal Variables
 (defvar buku--list-headers '(("index". ("ID" 5 t))
-                             ("title" . ("Title" (lambda () (/ (window-width) 3)) t))
-                             ("uri" . ("URL" (lambda () (/ (window-width) 3)) t))
+                             ("title" . ("Title" (lambda () (/ (window-width) 4)) t))
+                             ("uri" . ("URL" (lambda () (/ (window-width) 4)) t))
                              ("tags" . ("Tags" 10 t))
-                             ("description" . ("Desc" (lambda () (/ (window-width) 3)) t))))
+                             ("description" . ("Desc" (lambda () (/ (window-width) 4)) t))))
 
 (defvar buku--list-key "index")
 

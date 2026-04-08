@@ -28,31 +28,34 @@
 (require 'ctable)
 (defun buku-ctable--list-render (json-str)
   "Renders a ctable list from the provided JSON string by building a table model from the parsed data, creating a ctable component, and displaying it in a buffer."
-  (let* ((column-model ; column model
-          (mapcar
-           (lambda (item)
-             (make-ctbl:cmodel
-              :title
-              (cadr item)
-              :max-width
-              (buku--header-width item)
-              :align 'left))
-           buku--list-headers))
-         (json-data
-          (buku--json-parse-string json-str))
-         (data
-          (mapcar #'buku--hash-to-list json-data))
-         (model ; data model
-          (make-ctbl:model
-           :column-model column-model :data data))
-         (component ; ctable component
-          (ctbl:create-table-component-buffer
-           :model model
-           :buffer (get-buffer-create buku--buffer-name))))
-    (ctbl:cp-add-click-hook
-     component
-     #'buku-list-actions)
-    (pop-to-buffer (ctbl:cp-get-buffer component))))
+  (with-current-buffer (get-buffer-create buku--buffer-name)
+    (setq buffer-read-only t)
+    (let* ((inhibit-read-only t)
+           (column-model ; column model
+            (mapcar
+             (lambda (item)
+               (make-ctbl:cmodel
+                :title
+                (cadr item)
+                :max-width
+                (buku--header-width item)
+                :align 'left))
+             buku--list-headers))
+            (json-data
+             (buku--json-parse-string json-str))
+            (data
+             (mapcar #'buku--hash-to-list json-data))
+            (model ; data model
+             (make-ctbl:model
+              :column-model column-model :data data))
+            (component)) ; ctable component
+      (erase-buffer)
+      (switch-to-buffer (current-buffer))
+      (setq component (ctbl:create-table-component-region :model model))
+      (goto-line 3)
+      (ctbl:cp-add-click-hook
+       component
+       #'buku-list-actions))))
 
 (defun buku-ctable--list-get-id ()
   "Returns the ID of the current ctable list entry based on the position of buku--list-key in buku--list-headers."
