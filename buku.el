@@ -163,11 +163,11 @@
    "buku-delete" buku-command-path callback nil
    "-d" id "--tacit"))
 
-(defun buku-list-async (&optional callback)
+(defun buku-list-async (&optional callback search)
   "Asynchronously lists all bookmarks in JSON format, optionally invoking the provided callback when the process finishes."
   (buku--process-async-start
    "buku-list" buku-command-path callback nil
-   "-p" "-j"))
+   (or search "-p") "-j"))
 
 (defun buku-add-async (url &optional callback)
   "Asynchronously adds a bookmark with the given URL to Buku, optionally invoking the provided callback when the process finishes."
@@ -196,17 +196,17 @@
     (buku-edit-async (list id flag new-value) (lambda (_) (buku-list)))))
 
 ;;; Interactive Functions
-(defun buku-add ()
+(defun buku-add (&optional url)
   "Interactively prompts for a URL and asynchronously adds it to Buku, printing the result."
-  (interactive)
+  (interactive "sURL: ")
   (buku-add-async
-   (read-string "URL: ")
+   url
    #'print))
 
-(defun buku-list ()
+(defun buku-list (&optional search)
   "Interactively lists bookmarks from Buku, rendering them via the buku--list-render function."
   (interactive)
-  (buku-list-async #'buku--list-render))
+  (buku-list-async #'buku--list-render search))
 
 (defun buku-search ()
   "Interactively searches Buku bookmarks, retrieving them asynchronously and using buku--completing-read to handle completion."
