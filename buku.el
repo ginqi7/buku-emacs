@@ -52,6 +52,8 @@
 (defun buku--process-async-start (name program callback err-callback &rest program-args)
   (let* ((buf (generate-new-buffer (format "*%s*" name)))
          (buf-err (generate-new-buffer (format "*%s:err*" name))))
+    (when buku-process-async-debug
+      (print (format "%s: %s" name program-args)))
     (make-process
      :name name
      :buffer buf
@@ -99,8 +101,13 @@
   (print (format "[%s]:\n%s" title (string-replace "\\n" "\n" msg))))
 
 (defun buku--json-parse-string (str)
-  "Parses the given JSON STR and returns the result as list-based data structures."
-  (json-parse-string str :array-type 'list))
+  "Parses the given JSON STR and returns the result as list-based data structures.
+Return nil if STR is not a valid JSON string."
+  (when buku-process-async-debug
+    (print (format "output is %s" str)))
+  (condition-case nil
+      (json-parse-string str :array-type 'list)
+    (error nil)))
 
 (defun buku--completing-read (json-str)
   "Prompts the user with a completing-read list built from the Buku items in the given JSON string, formatting each item’s title, URI, description, and tags into a single string."
@@ -165,6 +172,8 @@
 
 (defun buku-list-async (&optional callback search)
   "Asynchronously lists all bookmarks in JSON format, optionally invoking the provided callback when the process finishes."
+  (when (string-empty-p search)
+    (setq search nil))
   (buku--process-async-start
    "buku-list" buku-command-path callback nil
    (or search "-p") "-j"))
