@@ -30,10 +30,10 @@
 
 (defcustom buku-vui-table-headers
   '(("index" . (:title "" :key t :width 5 :checkbox t :on-click (lambda (_) (buku-vui-table-perform-actions-in-selected))))
-    ("title" . (:title "Title" :width 10  :on-click buku-vui-table-edit-title))
-    ("uri" . (:title "URL" :width 10 :on-click buku-vui-table-edit-url))
-    ("tags" . (:title "Tags" :width 10 :on-click buku-vui-table-edit-tags))
-    ("description" . (:title "Desc" :width 20 :on-click buku-vui-table-edit-desc)))
+    ("title" . (:title "TITLE" :width 50  :on-click buku-vui-table-edit-title))
+    ("uri" . (:title "BASE URL" :width 20 :on-click buku-vui-table-edit-url :format buku-vui--get-domain))
+    ("tags" . (:title "TAGS" :width 10 :on-click buku-vui-table-edit-tags))
+    ("description" . (:title "DESC" :width 20 :on-click buku-vui-table-edit-desc)))
   "Table column definitions for buku-vui displaying index, title, URL, tags, and description.")
 
 ;;; Internal Variables
@@ -50,6 +50,12 @@
   "List of currently selected row ID keys for batch operations.")
 
 ;;; Internal Functions
+
+(defun buku-vui--get-domain (url)
+  "Extract just the domain from URL."
+  (let ((parsed (url-generic-parse-url url)))
+    (url-host parsed)))
+
 (cl-defun buku-vui--to-row (&key headers table row)
   "Build a vui row from ROW using HEADERS, TABLE, and ID-KEY.
 
@@ -60,10 +66,12 @@ optional on-click handler per column."
      (let* ((key (car header))
             (value (format "%s" (gethash key row)))
             (props (cdr header))
-            (on-click (plist-get props :on-click)))
+            (on-click (plist-get props :on-click))
+            (format-fun (plist-get props :format)))
        (cond
         ((buku-vui--header-checkbox-p header) (buku-vui--format-select header (format "%s" value)))
-        (on-click (buttonize value (lambda (_) (funcall on-click row))))
+        (on-click (buttonize (if format-fun (funcall format-fun value) value)
+                             (lambda (_) (funcall on-click row))))
         (t value))))
    headers))
 
@@ -133,9 +141,9 @@ and :reversed keys to control the sort arrow display."
   "Convert a single HEADER (a cons cell) into a vui column spec."
   (let* ((props (cdr header))
          (title (plist-get props :title))
-         (width (nth 1 (cdr header))))
+         (width (plist-get props :width)))
     (list :header title
-          :width 25
+          :width width
           :truncate t
           :align :left)))
 
@@ -180,6 +188,17 @@ and :reversed keys to control the sort arrow display."
 (defun buku-vui-table-edit-url (row)
   "Edit the URL field for ROW."
   (buku-vui-table-edit row "uri"))
+
+(defun buku-vui-table-add-tags (lst)
+  "Edit the URL field for ROW."
+  (let ((tags (read-string "Add tags: ")))
+    (mapcar (lambda (id)
+              (buku-edit :id id
+                         :type "tags"
+                         :new-value tags
+                         :tag "+"
+                         :callback (lambda (_) (buku-vui buku-vui--search))))
+            lst)))
 
 (vui-defcomponent buku-vui (columns rows)
   :state ((search buku-vui--search))
@@ -230,8 +249,24 @@ and :reversed keys to control the sort arrow display."
   "Perform actions on selected entries in buku-vui table."
   [:description
    (lambda () (format "Selected %s items." (length buku-vui--selected)))
-   ("d" "Delete" (lambda () (interactive)))
-   ("RET" "Open by browser" (lambda () (interactive) (mapcar #'buku-open buku-vui--selected)))])
+   ("t" "Add Tag"
+    (lambda ()
+      (interactive)
+      (buku-vui-table-add-tags buku-vui--selected)
+      (setq buku-vui--selected nil)
+      (buku-vui buku-vui--search)))
+   ("d" "Delete"
+    (lambda ()
+      (interactive)
+      (mapcar #'buku-delete buku-vui--selected)
+      (setq buku-vui--selected nil)
+      (buku-vui buku-vui--search)))
+   ("RET" "Open by browser"
+    (lambda ()
+      (interactive)
+      (mapcar #'buku-open buku-vui--selected)
+      (setq buku-vui--selected nil)
+      (buku-vui buku-vui--search)))])
 
 (defun buku-vui (&optional search)
   "Display the buku VUI interface, optionally filtered by SEARCH query."

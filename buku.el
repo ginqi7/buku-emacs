@@ -183,8 +183,8 @@ ARGS is a list containing the bookmark ID, flag, and new value."
   (interactive)
   (buku-list-async (apply-partially #'buku--completing-read callback)))
 
-(cl-defun buku-list-delete (&key id name)
-  "Delete a bookmark by ID or NAME, prompting for confirmation before removal."
+(defun buku-delete (&optional id)
+  "Delete a bookmark by ID, prompting for confirmation before removal."
   (interactive)
   (let ((id (or id (read-string "Bookmark ID: "))))
     (when (yes-or-no-p (format "Are you sure you want to delete this? [%s]"
@@ -197,14 +197,14 @@ ARGS is a list containing the bookmark ID, flag, and new value."
   (let ((id (or id (read-string "Bookmark ID: "))))
     (shell-command-to-string (format "%s -o %s" buku-command-path id))))
 
-(cl-defun buku-edit (&key id type old-value new-value callback)
+(cl-defun buku-edit (&key id type old-value new-value tag callback)
   "Edit a bookmark field TYPE for entry ID, using OLD-VALUE as the default and invoking CALLBACK on completion."
   (interactive)
   (let* ((id (format "%s" (or id (read-string "Bookmark ID: "))))
          (type (or type (completing-read "Edit Type: " buku--edit-flags)))
          (flag (alist-get type buku--edit-flags nil nil #'equal))
          (new-value (or new-value (read-string (format "Edit(%s)[%s]: " id type) old-value))))
-    (buku-edit-async (list id flag new-value) callback)))
+    (buku-edit-async (remove nil (list id flag tag new-value)) callback)))
 
 (provide 'buku)
 ;;; buku.el ends here
