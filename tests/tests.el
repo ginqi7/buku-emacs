@@ -22,3 +22,4 @@
 (load-dependencies-path)
 
 (require 'buku)
+(require 'buku-vui)
