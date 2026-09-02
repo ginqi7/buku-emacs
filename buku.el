@@ -147,19 +147,6 @@ ARGS is a list containing the bookmark ID, flag, and new value."
          "buku-edit" buku-command-path callback nil
          (cons "-u" args)))
 
-(defun buku-list--edit (arg)
-  "Updates the specified field of a bookmark in the Buku list by prompting for a new value, then asynchronously applying the edit and refreshing the list."
-  (let* ((entry (append (buku--list-get-entry) nil))
-         (id (int-to-string (buku--list-get-id)))
-         (header (car (alist-get arg buku--list-headers nil nil #'equal)))
-         (index (cl-position-if
-                 (lambda (item) (equal arg (car item)))
-                 buku--list-headers))
-         (old-value (nth index entry))
-         (flag (alist-get arg buku--edit-flags nil nil #'equal))
-         (new-value (read-string (format "Update %s: "header) old-value)))
-    (buku-edit-async (list id flag new-value) (lambda (_) (buku-list)))))
-
 ;;; Interactive Functions
 (defun buku-add (&optional url)
   "Interactively prompts for a URL and asynchronously adds it to Buku, printing the result."
@@ -167,11 +154,6 @@ ARGS is a list containing the bookmark ID, flag, and new value."
   (buku-add-async
    url
    (apply-partially #'buku--message "BUKU Add")))
-
-(defun buku-list (&optional search)
-  "Interactively lists bookmarks from Buku, rendering them via the buku--list-render function."
-  (interactive)
-  (buku-list-async #'buku--list-render search))
 
 (defun buku-search (&optional callback)
   "Interactively searches Buku bookmarks, retrieving them asynchronously and using buku--completing-read to handle completion."
