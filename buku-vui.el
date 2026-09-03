@@ -105,7 +105,9 @@ and :reversed keys to control the sort arrow display."
   (let ((map (make-sparse-keymap))
         (on-click (buku-vui--header-prop header :on-click)))
     (when on-click
-      (define-key map (kbd "RET") (lambda () (interactive) (funcall on-click value))))
+      (define-key map (kbd "RET") (lambda () (interactive)
+                                    (when (not (member value buku-vui--selected)) (buku-vui--select))
+                                    (funcall on-click value))))
     (define-key map (kbd "SPC") #'buku-vui--select)
     (propertize (buttonize value nil)
                 'display (if (member value buku-vui--selected) "☑" "☐")
@@ -164,6 +166,7 @@ and :reversed keys to control the sort arrow display."
       (if buku-vui--instance
           (vui-update-props buku-vui--instance props)
         (setq-local buku-vui--instance (vui-mount (apply #'vui-component 'buku-vui props)  buku-vui-buffer-name)))
+      (sit-for 0.2)
       (goto-char pos))))
 
 (defun buku-vui-table-edit (row type)
