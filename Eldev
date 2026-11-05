@@ -1,0 +1,21 @@
+; -*- mode: emacs-lisp; lexical-binding: t -*-
+
+;; Eldev configuration for buku-emacs.
+;;
+;; This project ships two files, `buku.el' and `buku-vui.el', which together
+;; form one package.  Without an explicit main file, package-lint treats each
+;; file as a separate package and complains that the `buku-vui-' symbols are
+;; not prefixed with the package name of `buku-vui.el'.  All
+;; `Package-Requires' therefore live in `buku.el' only.
+
+(eldev-use-package-archive 'gnu-elpa)
+(eldev-use-package-archive 'nongnu-elpa)
+(eldev-use-package-archive 'melpa)
+
+;; Use the latest commit rather than the latest stable tag for VC repositories.
+(setq eldev-prefer-stable-archives nil)
+
+;; `vui' is the table/UI toolkit used by `buku-vui.el'.
+(eldev-use-vc-repository 'vui :github "d12frosted/vui.el")
+
+(setq eldev-project-main-file "buku.el")

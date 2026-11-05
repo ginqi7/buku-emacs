@@ -1,0 +1,10 @@
+# Eldev dependencies and caches
+.eldev/
+.cask/
+elpa/
+
+# Byte-compiled elisp
+*.elc
+
+# macOS
+.DS_Store

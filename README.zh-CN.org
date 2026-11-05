@@ -19,6 +19,26 @@
   (add-to-list 'load-path "~/.emacs.d/lisp/buku")
 #+END_SRC
 
+* 开发
+
+本项目使用 [[https://github.com/emacs-eldev/eldev][Eldev]] 开发，先安装一次：
+#+BEGIN_SRC sh
+  curl -fsSL https://raw.githubusercontent.com/emacs-eldev/eldev/master/webinstall/eldev | sh
+#+END_SRC
+
+然后在项目根目录下：
+
+#+BEGIN_SRC sh
+  eldev prepare                     # 安装 vui 以及测试依赖
+  eldev lint                        # 运行 package-lint、relint 等检查
+  eldev compile --warnings-as-errors
+  eldev test                        # 运行 Buttercup 测试
+#+END_SRC
+
+也可以用 =make= 调用（=make prepare=、=make lint=、=make compile=、=make test=、
+=make clean=，或者直接 =make= 执行全部）。=Eldev= 中声明的依赖会安装到
+=.eldev/= 目录（已被 git 忽略），开发时不再需要额外克隆 =vui=。
+
 * 配置
 
 #+BEGIN_SRC emacs-lisp

@@ -1,9 +1,11 @@
-;;; buku-vui.el ---                                  -*- lexical-binding: t; -*-
+;;; buku-vui.el --- VUI interface for the buku bookmark manager  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026  Qiqi Jin
 
 ;; Author: Qiqi Jin <ginqi7@gmail.com>
-;; Keywords:
+;; Version: 0.1.0
+;; URL: https://github.com/ginqi7/buku-emacs
+;; Keywords: hypermedia, tools
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -18,15 +20,31 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ;;; Commentary:
-;;
+
+;; A `vui'-based front end for the `buku' bookmark manager.  The
+;; bookmarks are fetched with `buku-list-async' and rendered as a table
+;; with sortable, clickable columns; batch actions on selected rows are
+;; exposed through the `buku-vui-table-perform-actions-in-selected'
+;; transient.
+
 ;;; Code:
 (require 'buku)
 
 (require 'vui)
+;; `vui-heading' and friends live in `vui-components', which `vui' itself
+;; does not load.
+(require 'vui-components)
 
 ;;; Custom Variables
+(defgroup buku-vui nil
+  "VUI interface for the buku bookmark manager."
+  :group 'buku
+  :prefix "buku-vui-")
+
 (defcustom buku-vui-buffer-name "*buku-vui*"
-  "Name of the buffer used for displaying the buku VUI interface.")
+  "Name of the buffer used for displaying the buku VUI interface."
+  :type 'string
+  :group 'buku-vui)
 
 (defcustom buku-vui-table-headers
   '(("index" . (:title "" :key t :width 5 :checkbox t :on-click (lambda (_) (buku-vui-table-perform-actions-in-selected))))
@@ -34,7 +52,12 @@
     ("uri" . (:title "BASE URL" :width 20 :on-click buku-vui-table-edit-url :format buku-vui--get-domain))
     ("tags" . (:title "TAGS" :width 10 :on-click buku-vui-table-edit-tags))
     ("description" . (:title "DESC" :width 20 :on-click buku-vui-table-edit-desc)))
-  "Table column definitions for buku-vui displaying index, title, URL, tags, and description.")
+  "Table column definitions for the buku VUI interface.
+Each element is a cons cell of the column key in the `buku' JSON
+output and a property list with the column title, width and optional
+click and formatting handlers."
+  :type '(alist :key-type string :value-type plist)
+  :group 'buku-vui)
 
 ;;; Internal Variables
 (defvar-local buku-vui--instance nil
@@ -42,6 +65,12 @@
 
 (defvar-local buku-vui--rows nil
   "List of rows (hash tables) currently displayed in the table.")
+
+(defvar-local buku-vui--data nil
+  "Bookmarks currently displayed, used to re-render the table on sorting.")
+
+(defvar-local buku-vui--sort nil
+  "Current sort as a cons cell (KEY . REVERSE), or nil when unsorted.")
 
 (defvar-local buku-vui--search nil
   "Current search query string for filtering bookmarks.")
@@ -56,11 +85,12 @@
   (let ((parsed (url-generic-parse-url url)))
     (url-host parsed)))
 
-(cl-defun buku-vui--to-row (&key headers table row)
-  "Build a vui row from ROW using HEADERS, TABLE, and ID-KEY.
+(cl-defun buku-vui--to-row (&key headers row)
+  "Build a vui row for ROW using HEADERS.
 
-Each row contains a checkbox, cell values for each header, and an
-optional on-click handler per column."
+Each cell is built from the column definition: the checkbox column
+renders a toggle, columns with an :on-click handler are buttonized and
+an optional :format handler may transform the raw value first."
   (mapcar
    (lambda (header)
      (let* ((key (car header))
@@ -76,14 +106,13 @@ optional on-click handler per column."
    headers))
 
 (cl-defun buku-vui--to-rows (&key headers table)
-  "Convert TABLE rows into a list of vui rows sorted by the active sort header.
+  "Convert TABLE into a list of vui rows.
 
-HEADERS defines the column structure, TABLE is a list of hash tables,
-and ID-KEY identifies each row uniquely for selection."
+HEADERS defines the column structure and TABLE is a list of bookmark
+hash tables as returned by `buku--json-parse-string'."
   (mapcar
    (apply-partially #'buku-vui--to-row
                     :headers headers
-                    :table table
                     :row)
    table))
 
@@ -100,8 +129,47 @@ and :reversed keys to control the sort arrow display."
          (if (plist-get props :reversed) " ↓" " ↑")
        ""))))
 
+(defun buku-vui--set-sort (&optional key)
+  "Sort the table by column KEY, reversing the order on repeated calls.
+KEY is the column key passed in by the clickable column headers."
+  (interactive)
+  (let ((key (or key (car-safe buku-vui--sort))))
+    (setq buku-vui--sort
+          (if (equal key (car-safe buku-vui--sort))
+              (cons key (not (cdr buku-vui--sort)))
+            (cons key nil)))
+    (when buku-vui--data
+      (buku-vui--render-rows))))
+
+(defun buku-vui--sorted-rows (rows)
+  "Return ROWS sorted according to `buku-vui--sort'."
+  (if (null buku-vui--sort)
+      rows
+    (let ((key (car buku-vui--sort))
+          (reverse (cdr buku-vui--sort)))
+      (sort (copy-sequence rows)
+            (lambda (row-1 row-2)
+              (let ((value-1 (format "%s" (gethash key row-1)))
+                    (value-2 (format "%s" (gethash key row-2))))
+                (if reverse
+                    (string> value-1 value-2)
+                  (string< value-1 value-2))))))))
+
+(defun buku-vui--headers-with-sort (headers)
+  "Return HEADERS annotated with the :sorted and :reversed properties."
+  (mapcar
+   (lambda (header)
+     (let ((props (copy-sequence (cdr header))))
+       (when (equal (car header) (car-safe buku-vui--sort))
+         (setq props (plist-put props :sorted t))
+         (when (cdr buku-vui--sort)
+           (setq props (plist-put props :reversed t))))
+       (cons (car header) props)))
+   headers))
+
 (defun buku-vui--format-select (header value)
-  "Return a checkbox button for KEY, toggled if already selected."
+  "Return a checkbox button for VALUE of the checkbox column HEADER.
+The box is checked when VALUE is in `buku-vui--selected'."
   (let ((map (make-sparse-keymap))
         (on-click (buku-vui--header-prop header :on-click)))
     (when on-click
@@ -114,6 +182,7 @@ and :reversed keys to control the sort arrow display."
                 'keymap map)))
 
 (defun buku-vui--header-checkbox-p (header)
+  "Return non-nil if HEADER is the checkbox column."
   (buku-vui--header-prop header :checkbox))
 
 (defun buku-vui--header-prop (header prop)
@@ -150,27 +219,35 @@ and :reversed keys to control the sort arrow display."
           :align :left)))
 
 (defun buku-vui--to-columns (headers)
-  "Convert HEADERS into a vui column spec list, prepending an empty checkbox column."
+  "Convert HEADERS into a vui column spec list."
   (mapcar #'buku-vui--to-column headers))
+
+(defun buku-vui--render-rows ()
+  "Render `buku-vui--data' in the current buffer."
+  (let* ((headers (buku-vui--headers-with-sort buku-vui-table-headers))
+         (columns (buku-vui--to-columns headers))
+         (rows (buku-vui--to-rows
+                :headers headers
+                :table (buku-vui--sorted-rows buku-vui--data)))
+         (props (list :columns columns :rows rows))
+         (position (point)))
+    (setq-local buku-vui--rows (buku-vui--sorted-rows buku-vui--data))
+    (if buku-vui--instance
+        (vui-update-props buku-vui--instance props)
+      (setq-local buku-vui--instance
+                  (vui-mount (apply #'vui-component 'buku-vui props)
+                             buku-vui-buffer-name)))
+    (sit-for 0.2)
+    (goto-char position)))
 
 (defun buku-vui-render (json-str)
   "Parse JSON-STR and render the buku VUI table in the dedicated buffer."
   (with-current-buffer (get-buffer-create buku-vui-buffer-name)
-    (let* ((columns (buku-vui--to-columns buku-vui-table-headers))
-           (json-data (buku--json-parse-string json-str))
-           (rows (buku-vui--to-rows
-                  :headers buku-vui-table-headers
-                  :table json-data))
-           (props (list :columns columns :rows rows))
-           (pos (point)))
-      (if buku-vui--instance
-          (vui-update-props buku-vui--instance props)
-        (setq-local buku-vui--instance (vui-mount (apply #'vui-component 'buku-vui props)  buku-vui-buffer-name)))
-      (sit-for 0.2)
-      (goto-char pos))))
+    (setq-local buku-vui--data (buku--json-parse-string json-str))
+    (buku-vui--render-rows)))
 
 (defun buku-vui-table-edit (row type)
-  "Edit field TYPE for ROW, prompting for new value and refreshing the VUI on completion."
+  "Edit the field TYPE of ROW, refreshing the VUI once `buku' finishes."
   (buku-edit :id (gethash "index" row)
              :type type
              :old-value (gethash type row)
@@ -193,15 +270,15 @@ and :reversed keys to control the sort arrow display."
   (buku-vui-table-edit row "uri"))
 
 (defun buku-vui-table-add-tags (lst)
-  "Edit the URL field for ROW."
+  "Prompt for tags and add them to every bookmark in LST."
   (let ((tags (read-string "Add tags: ")))
-    (mapcar (lambda (id)
-              (buku-edit :id id
-                         :type "tags"
-                         :new-value tags
-                         :tag "+"
-                         :callback (lambda (_) (buku-vui buku-vui--search))))
-            lst)))
+    (mapc (lambda (id)
+            (buku-edit :id id
+                       :type "tags"
+                       :new-value tags
+                       :tag "+"
+                       :callback (lambda (_) (buku-vui buku-vui--search))))
+          lst)))
 
 (vui-defcomponent buku-vui (columns rows)
   :state ((search buku-vui--search))
@@ -224,7 +301,7 @@ and :reversed keys to control the sort arrow display."
      :face 'custom-button
      :on-click (lambda () (buku-add url) (vui-set-state :url "")))))
 
-(vui-defcomponent buku-vui-search (search on-search-change)
+(vui-defcomponent buku-vui-search ()
   :state ((search ""))
   :render
   (vui-hstack
@@ -261,13 +338,13 @@ and :reversed keys to control the sort arrow display."
    ("d" "Delete"
     (lambda ()
       (interactive)
-      (mapcar #'buku-delete buku-vui--selected)
+      (mapc #'buku-delete buku-vui--selected)
       (setq buku-vui--selected nil)
       (buku-vui buku-vui--search)))
    ("RET" "Open by browser"
     (lambda ()
       (interactive)
-      (mapcar #'buku-open buku-vui--selected)
+      (mapc #'buku-open buku-vui--selected)
       (setq buku-vui--selected nil)
       (buku-vui buku-vui--search)))])
 
