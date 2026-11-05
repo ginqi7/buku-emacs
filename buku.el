@@ -118,7 +118,7 @@ ERR-CALLBACK is called with the standard error output."
       (message (format "[%s]:\n%s" title msg))))
 
 (defun buku--json-parse-string (str)
-  "Parse the given JSON STR and returns the result as list-based data structures.
+  "Parse the given JSON STR and return the result as list-based data structures.
 Return nil if STR is not a valid JSON string."
   (when buku-process-async-debug
     (print (format "output is %s" str)))
