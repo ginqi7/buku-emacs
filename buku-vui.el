@@ -130,7 +130,7 @@ and :reversed keys to control the sort arrow display."
        ""))))
 
 (defun buku-vui--set-sort (&optional key)
-  "Sort the table by column KEY, reversing the order on repeated calls.
+  "Sort the table by column KEY, reversing the order on repeated call.
 KEY is the column key passed in by the clickable column headers."
   (interactive)
   (let ((key (or key (car-safe buku-vui--sort))))
